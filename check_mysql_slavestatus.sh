@@ -46,6 +46,7 @@
 # 2013101602 Rewrite help output                                        #
 # 2013101700 Handle Slave IO in 'Connecting' state                      #
 # 2013101701 Minor changes in output, handling UNKWNON situations now   #
+# 2013101702 Exit CRITICAL when Slave IO in Connecting state            #
 #########################################################################
 # Usage: ./check_mysql_slavestatus.sh -H dbhost -P port -u dbuser -p dbpass -w integer -c integer
 #########################################################################
@@ -130,7 +131,7 @@ echo "CRITICAL: ${host} Slave_IO_Running: ${checkio}"; exit ${STATE_CRITICAL};
 fi
 
 if [ ${checkio} = "Connecting" ]; then 
-echo "WARNING: ${host} Slave_IO_Running: ${checkio}"; exit ${STATE_WARNING};
+echo "CRITICAL: ${host} Slave_IO_Running: ${checkio}"; exit ${STATE_CRITICAL};
 fi
 
 if [ ${check} = ${ok} ] && [ ${checkio} = ${ok} ]; then
