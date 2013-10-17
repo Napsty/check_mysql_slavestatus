@@ -45,6 +45,7 @@
 # 2013101601 Optical clean up                                           #
 # 2013101602 Rewrite help output                                        #
 # 2013101700 Handle Slave IO in 'Connecting' state                      #
+# 2013101701 Minor changes in output, handling UNKWNON situations now   #
 #########################################################################
 # Usage: ./check_mysql_slavestatus.sh -H dbhost -P port -u dbuser -p dbpass -w integer -c integer
 #########################################################################
@@ -125,16 +126,16 @@ echo "CRITICAL: ${host}:${port} Slave_SQL_Running: ${check}"; exit ${STATE_CRITI
 fi
 
 if [ ${checkio} = ${crit} ]; then 
-echo "CRITICAL: ${host} Slave IO Running: ${checkio}"; exit ${STATE_CRITICAL};
+echo "CRITICAL: ${host} Slave_IO_Running: ${checkio}"; exit ${STATE_CRITICAL};
 fi
 
 if [ ${checkio} = "Connecting" ]; then 
-echo "WARNING: ${host} Slave IO Status: ${checkio}"; exit ${STATE_WARNING};
+echo "WARNING: ${host} Slave_IO_Running: ${checkio}"; exit ${STATE_WARNING};
 fi
 
-if [ ${check} = ${ok} ]; then
-# Delay thresholds are set
-if [[ -n ${warn_delay} ]] && [[ -n ${crit_delay} ]]; then
+if [ ${check} = ${ok} ] && [ ${checkio} = ${ok} ]; then
+ # Delay thresholds are set
+ if [[ -n ${warn_delay} ]] && [[ -n ${crit_delay} ]]; then
   if ! [[ ${warn_delay} -gt 0 ]]; then echo "Warning threshold must be a valid integer greater than 0"; exit $STATE_UNKNOWN; fi
   if ! [[ ${crit_delay} -gt 0 ]]; then echo "Warning threshold must be a valid integer greater than 0"; exit $STATE_UNKNOWN; fi
   if [[ -z ${warn_delay} ]] || [[ -z ${crit_delay} ]]; then echo "Both warning and critical thresholds must be set"; exit $STATE_UNKNOWN; fi
@@ -146,11 +147,12 @@ if [[ -n ${warn_delay} ]] && [[ -n ${crit_delay} ]]; then
   then echo "WARNING: Slave is ${delayinfo} seconds behind Master | delay=${delayinfo}s"; exit ${STATE_WARNING}
   else echo "OK: Slave SQL running: ${check} Slave IO running: ${checkio} / master: ${masterinfo} / slave is ${delayinfo} seconds behind master | delay=${delayinfo}s"; exit ${STATE_OK};
   fi
-fi
-# Without delay thresholds
-echo "OK: Slave SQL running: ${check} Slave IO running: ${checkio} / master: ${masterinfo} / slave is ${delayinfo} seconds behind master | delay=${delayinfo}s"
-exit ${STATE_OK};
+ else
+ # Without delay thresholds
+ echo "OK: Slave SQL running: ${check} Slave IO running: ${checkio} / master: ${masterinfo} / slave is ${delayinfo} seconds behind master | delay=${delayinfo}s"
+ exit ${STATE_OK};
+ fi
 fi
 
-echo "UNKNOWN: should never reach this part"
+echo "UNKNOWN: should never reach this part (Slave_SQL_Running is ${check}, Slave_IO_Running is ${checkio})"
 exit ${STATE_UNKNOWN}
