@@ -44,6 +44,7 @@
 # 2013101600 Rewrite of threshold logic and handling                    #
 # 2013101601 Optical clean up                                           #
 # 2013101602 Rewrite help output                                        #
+# 2013101700 Handle Slave IO in 'Connecting' state                      #
 #########################################################################
 # Usage: ./check_mysql_slavestatus.sh -H dbhost -P port -u dbuser -p dbpass -w integer -c integer
 #########################################################################
@@ -125,6 +126,10 @@ fi
 
 if [ ${checkio} = ${crit} ]; then 
 echo "CRITICAL: ${host} Slave IO Running: ${checkio}"; exit ${STATE_CRITICAL};
+fi
+
+if [ ${checkio} = "Connecting" ]; then 
+echo "WARNING: ${host} Slave IO Status: ${checkio}"; exit ${STATE_WARNING};
 fi
 
 if [ ${check} = ${ok} ]; then
