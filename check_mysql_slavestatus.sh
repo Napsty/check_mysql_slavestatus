@@ -11,7 +11,8 @@
 #		Soren Klintrup for stuff added on 20081015              #
 #		Marc Feret for Slave_IO_Running check 20111227          #
 #		Peter Lecki for his mods added on 20120803              #
-#		Serge Victor for his mods added on 201312023            #
+#		Serge Victor for his mods added on 20131223             #
+#               Omri Bahumi for his fix added on 20131230               #
 # History:                                                              #
 # 2008041700 Original Script modified                                   #
 # 2008041701 Added additional info if status OK	                        #
@@ -52,7 +53,7 @@
 #########################################################################
 # Usage: ./check_mysql_slavestatus.sh -H dbhost -P port -u dbuser -p dbpass -s connection -w integer -c integer
 #########################################################################
-help="\ncheck_mysql_slavestatus.sh (c) 2008-2013 GNU GPLv2 licence
+help="\ncheck_mysql_slavestatus.sh (c) 2008-2014 GNU GPLv2 licence
 Usage: check_mysql_slavestatus.sh -H host -P port -u username -p password [-s connection] [-w integer] [-c integer]\n
 Options:\n-H Hostname or IP of slave server\n-P Port of slave server\n-u Username of DB-user\n-p Password of DB-user\n-s Connection name (optional, with multi-source replication)\n-w Delay in seconds for Warning status (optional)\n-c Delay in seconds for Critical status (optional)\n
 Attention: The DB-user you type in must have CLIENT REPLICATION rights on the DB-server. Example:\n\tGRANT REPLICATION CLIENT on *.* TO 'nagios'@'%' IDENTIFIED BY 'secret';"
