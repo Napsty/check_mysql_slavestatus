@@ -48,6 +48,7 @@
 # 2013101700 Handle Slave IO in 'Connecting' state                      #
 # 2013101701 Minor changes in output, handling UNKWNON situations now   #
 # 2013101702 Exit CRITICAL when Slave IO in Connecting state            #
+# 2013123000 Slave_SQL_Running also matched Slave_SQL_Running_State     #
 #########################################################################
 # Usage: ./check_mysql_slavestatus.sh -H dbhost -P port -u dbuser -p dbpass -s connection -w integer -c integer
 #########################################################################
@@ -113,10 +114,10 @@ if [ -z "`echo "${ConnectionResult}" |grep Slave_IO_State`" ]; then
 	echo -e "CRITICAL: Unable to connect to server ${host}:${port} with username '${user}' and given password"
 	exit ${STATE_CRITICAL}
 fi
-check=`echo "${ConnectionResult}" |grep Slave_SQL_Running | awk '{print $2}'`
-checkio=`echo "${ConnectionResult}" |grep Slave_IO_Running | awk '{print $2}'`
-masterinfo=`echo "${ConnectionResult}" |grep  Master_Host | awk '{print $2}'`
-delayinfo=`echo "${ConnectionResult}" |grep Seconds_Behind_Master | awk '{print $2}'`
+check=`echo "${ConnectionResult}" |grep Slave_SQL_Running: | awk '{print $2}'`
+checkio=`echo "${ConnectionResult}" |grep Slave_IO_Running: | awk '{print $2}'`
+masterinfo=`echo "${ConnectionResult}" |grep  Master_Host: | awk '{print $2}'`
+delayinfo=`echo "${ConnectionResult}" |grep Seconds_Behind_Master: | awk '{print $2}'`
 
 # Output of different exit states
 #########################################################################
