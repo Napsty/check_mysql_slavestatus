@@ -66,7 +66,7 @@ export PATH=$PATH:/usr/local/bin:/usr/bin:/bin # Set path
 crit="No"		# what is the answer of MySQL Slave_SQL_Running for a Critical status?
 ok="Yes"		# what is the answer of MySQL Slave_SQL_Running for an OK status?
 
-for cmd in mysql awk grep [ 
+for cmd in mysql awk grep [
 do
  if ! `which ${cmd} &>/dev/null`
  then
@@ -77,8 +77,8 @@ done
 
 # Check for people who need help - aren't we all nice ;-)
 #########################################################################
-if [ "${1}" = "--help" -o "${#}" = "0" ]; 
-	then 
+if [ "${1}" = "--help" -o "${#}" = "0" ];
+	then
 	echo -e "${help}";
 	exit 1;
 fi
@@ -122,19 +122,19 @@ delayinfo=`echo "${ConnectionResult}" |grep Seconds_Behind_Master: | awk '{print
 
 # Output of different exit states
 #########################################################################
-if [ ${check} = "NULL" ]; then 
+if [ ${check} = "NULL" ]; then
 echo "CRITICAL: Slave_SQL_Running is answering NULL"; exit ${STATE_CRITICAL};
 fi
 
-if [ ${check} = ${crit} ]; then 
+if [ ${check} = ${crit} ]; then
 echo "CRITICAL: ${host}:${port} Slave_SQL_Running: ${check}"; exit ${STATE_CRITICAL};
 fi
 
-if [ ${checkio} = ${crit} ]; then 
+if [ ${checkio} = ${crit} ]; then
 echo "CRITICAL: ${host} Slave_IO_Running: ${checkio}"; exit ${STATE_CRITICAL};
 fi
 
-if [ ${checkio} = "Connecting" ]; then 
+if [ ${checkio} = "Connecting" ]; then
 echo "CRITICAL: ${host} Slave_IO_Running: ${checkio}"; exit ${STATE_CRITICAL};
 fi
 
