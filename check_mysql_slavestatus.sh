@@ -1,22 +1,22 @@
 #!/bin/bash
 #########################################################################
-# Script:	check_mysql_slavestatus.sh                              #
-# Author:	Claudio Kuenzler www.claudiokuenzler.com                #
-# Purpose:	Monitor MySQL Replication status with Nagios            #
-# Description:	Connects to given MySQL hosts and checks for running    #
-#		SLAVE state and delivers additional info                #
-# Original:	This script is a modified version of                    #
-#		check mysql slave sql running written by dhirajt        #
-# Thanks to:	Victor Balada Diaz for his ideas added on 20080930      #
-#		Soren Klintrup for stuff added on 20081015              #
-#		Marc Feret for Slave_IO_Running check 20111227          #
-#		Peter Lecki for his mods added on 20120803              #
-#		Serge Victor for his mods added on 20131223             #
+# Script:       check_mysql_slavestatus.sh                              #
+# Author:       Claudio Kuenzler www.claudiokuenzler.com                #
+# Purpose:      Monitor MySQL Replication status with Nagios            #
+# Description:  Connects to given MySQL hosts and checks for running    #
+#               SLAVE state and delivers additional info                #
+# Original:     This script is a modified version of                    #
+#               check mysql slave sql running written by dhirajt        #
+# Thanks to:    Victor Balada Diaz for his ideas added on 20080930      #
+#               Soren Klintrup for stuff added on 20081015              #
+#               Marc Feret for Slave_IO_Running check 20111227          #
+#               Peter Lecki for his mods added on 20120803              #
+#               Serge Victor for his mods added on 20131223             #
 #               Omri Bahumi for his fix added on 20131230               #
 # History:                                                              #
 # 2008041700 Original Script modified                                   #
-# 2008041701 Added additional info if status OK	                        #
-# 2008041702 Added usage of script with params -H -u -p	                #
+# 2008041701 Added additional info if status OK                         #
+# 2008041702 Added usage of script with params -H -u -p                 #
 # 2008041703 Added bindir variable for multiple platforms               #
 # 2008041704 Added help because mankind needs help                      #
 # 2008093000 Using /bin/sh instead of /bin/bash                         #
@@ -50,23 +50,24 @@
 # 2013101701 Minor changes in output, handling UNKWNON situations now   #
 # 2013101702 Exit CRITICAL when Slave IO in Connecting state            #
 # 2013123000 Slave_SQL_Running also matched Slave_SQL_Running_State     #
+# 2015011600 Added 'moving' check to catch possible connection issues   #
 #########################################################################
-# Usage: ./check_mysql_slavestatus.sh -H dbhost -P port -u dbuser -p dbpass -s connection -w integer -c integer
+# Usage: ./check_mysql_slavestatus.sh -H dbhost -P port -u dbuser -p dbpass [-s connection] [-w integer] [-c integer] [-m]
 #########################################################################
-help="\ncheck_mysql_slavestatus.sh (c) 2008-2014 GNU GPLv2 licence
-Usage: check_mysql_slavestatus.sh -H host -P port -u username -p password [-s connection] [-w integer] [-c integer]\n
+help="\ncheck_mysql_slavestatus.sh (c) 2008-2015 GNU GPLv2 licence
+Usage: check_mysql_slavestatus.sh -H host -P port -u username -p password [-s connection] [-w integer] [-c integer] [-m]\n
 Options:\n-H Hostname or IP of slave server\n-P Port of slave server\n-u Username of DB-user\n-p Password of DB-user\n-s Connection name (optional, with multi-source replication)\n-w Delay in seconds for Warning status (optional)\n-c Delay in seconds for Critical status (optional)\n
 Attention: The DB-user you type in must have CLIENT REPLICATION rights on the DB-server. Example:\n\tGRANT REPLICATION CLIENT on *.* TO 'nagios'@'%' IDENTIFIED BY 'secret';"
 
-STATE_OK=0		# define the exit code if status is OK
-STATE_WARNING=1		# define the exit code if status is Warning (not really used)
-STATE_CRITICAL=2	# define the exit code if status is Critical
-STATE_UNKNOWN=3		# define the exit code if status is Unknown
+STATE_OK=0              # define the exit code if status is OK
+STATE_WARNING=1         # define the exit code if status is Warning (not really used)
+STATE_CRITICAL=2        # define the exit code if status is Critical
+STATE_UNKNOWN=3         # define the exit code if status is Unknown
 export PATH=$PATH:/usr/local/bin:/usr/bin:/bin # Set path
-crit="No"		# what is the answer of MySQL Slave_SQL_Running for a Critical status?
-ok="Yes"		# what is the answer of MySQL Slave_SQL_Running for an OK status?
+crit="No"               # what is the answer of MySQL Slave_SQL_Running for a Critical status?
+ok="Yes"                # what is the answer of MySQL Slave_SQL_Running for an OK status?
 
-for cmd in mysql awk grep [
+for cmd in mysql awk grep expr [
 do
  if ! `which ${cmd} &>/dev/null`
  then
@@ -78,47 +79,54 @@ done
 # Check for people who need help - aren't we all nice ;-)
 #########################################################################
 if [ "${1}" = "--help" -o "${#}" = "0" ];
-	then
-	echo -e "${help}";
-	exit 1;
+        then
+        echo -e "${help}";
+        exit 1;
 fi
 
 # Important given variables for the DB-Connect
 #########################################################################
-while getopts "H:P:u:p:s:w:c:h" Input;
+while getopts "H:P:u:p:s:w:c:mh" Input;
 do
-	case ${Input} in
-	H)	host=${OPTARG};;
-	P)	port=${OPTARG};;
-	u)	user=${OPTARG};;
-	p)	password=${OPTARG};;
-	s)	connection=\"${OPTARG}\";;
-	w)      warn_delay=${OPTARG};;
-	c)      crit_delay=${OPTARG};;
-	h)      echo -e "${help}"; exit 1;;
-	\?)	echo "Wrong option given. Please use options -H for host, -P for port, -u for user and -p for password"
-		exit 1
-		;;
-	esac
+        case ${Input} in
+        H)      host=${OPTARG};;
+        P)      port=${OPTARG};;
+        u)      user=${OPTARG};;
+        p)      password=${OPTARG};;
+        s)      connection=\"${OPTARG}\";;
+        w)      warn_delay=${OPTARG};;
+        c)      crit_delay=${OPTARG};;
+        m)      moving=1;;
+        h)      echo -e "${help}"; exit 1;;
+        \?)     echo "Wrong option given. Please use options -H for host, -P for port, -u for user and -p for password"
+                exit 1
+                ;;
+        esac
 done
+
+# Check if we can write to tmp
+#########################################################################
+test -w /tmp && tmpfile="/tmp/${host}pos.txt"
 
 # Connect to the DB server and check for informations
 #########################################################################
 # Check whether all required arguments were passed in
 if [ -z "${host}" -o -z "${port}" -o -z "${user}" -o -z "${password}" ];then
-	echo -e "${help}"
-	exit ${STATE_UNKNOWN}
+        echo -e "${help}"
+        exit ${STATE_UNKNOWN}
 fi
 # Connect to the DB server and store output in vars
 ConnectionResult=`mysql -h ${host} -P ${port} -u ${user} --password=${password} -e "show slave ${connection} status\G" 2>&1`
 if [ -z "`echo "${ConnectionResult}" |grep Slave_IO_State`" ]; then
-	echo -e "CRITICAL: Unable to connect to server ${host}:${port} with username '${user}' and given password"
-	exit ${STATE_CRITICAL}
+        echo -e "CRITICAL: Unable to connect to server ${host}:${port} with username '${user}' and given password"
+        exit ${STATE_CRITICAL}
 fi
 check=`echo "${ConnectionResult}" |grep Slave_SQL_Running: | awk '{print $2}'`
 checkio=`echo "${ConnectionResult}" |grep Slave_IO_Running: | awk '{print $2}'`
 masterinfo=`echo "${ConnectionResult}" |grep  Master_Host: | awk '{print $2}'`
 delayinfo=`echo "${ConnectionResult}" |grep Seconds_Behind_Master: | awk '{print $2}'`
+readpos=`echo "${ConnectionResult}" |grep Read_Master_Log_Pos: | awk '{print $2}'`
+execpos=`echo "${ConnectionResult}" |grep Exec_Master_Log_Pos: | awk '{print $2}'`
 
 # Output of different exit states
 #########################################################################
@@ -150,7 +158,39 @@ if [ ${check} = ${ok} ] && [ ${checkio} = ${ok} ]; then
   then echo "CRITICAL: Slave is ${delayinfo} seconds behind Master | delay=${delayinfo}s"; exit ${STATE_CRITICAL}
   elif [[ ${delayinfo} -ge ${warn_delay} ]]
   then echo "WARNING: Slave is ${delayinfo} seconds behind Master | delay=${delayinfo}s"; exit ${STATE_WARNING}
-  else echo "OK: Slave SQL running: ${check} Slave IO running: ${checkio} / master: ${masterinfo} / slave is ${delayinfo} seconds behind master | delay=${delayinfo}s"; exit ${STATE_OK};
+  else 
+    # Everything looks OK here but now let us check if the replication is moving
+    if [[ ${moving} -eq 1 ]] && [[ -n ${tmpfile} ]] && [[ $readpos -eq $execpos ]]
+    then  
+      #echo "Debug: Read pos is $readpos - Exec pos is $execpos" 
+      # Check if tmp file exists
+      curtime=`date +%s`
+      if [[ -w $tmpfile ]] 
+      then 
+        tmpfiletime=`date +%s -r $tmpfile`
+        if [[ `expr $curtime - $tmpfiletime` -gt ${warn_delay} ]]
+        then
+          exectmp=`cat $tmpfile`
+          #echo "Debug: Exec pos in tmpfile is $exectmp"
+          if [[ $exectmp -eq $execpos ]]
+          then 
+            # The value read from the tmp file and from db are the same. Replication hasnt moved!
+            echo "WARNING: Slave replication has not moved in ${warn_delay} seconds. Manual check required."; exit ${STATE_WARNING}
+          else 
+            # Replication has moved since the tmp file was written. Delete tmp file and output OK.
+            rm $tmpfile
+            echo "OK: Slave SQL running: ${check} Slave IO running: ${checkio} / master: ${masterinfo} / slave is ${delayinfo} seconds behind master | delay=${delayinfo}s"; exit ${STATE_OK};
+          fi
+        else 
+          echo "OK: Slave SQL running: ${check} Slave IO running: ${checkio} / master: ${masterinfo} / slave is ${delayinfo} seconds behind master | delay=${delayinfo}s"; exit ${STATE_OK};
+        fi
+      else 
+        echo "$execpos" > $tmpfile
+        echo "OK: Slave SQL running: ${check} Slave IO running: ${checkio} / master: ${masterinfo} / slave is ${delayinfo} seconds behind master | delay=${delayinfo}s"; exit ${STATE_OK};
+      fi
+    else # Everything OK (no additional moving check)
+      echo "OK: Slave SQL running: ${check} Slave IO running: ${checkio} / master: ${masterinfo} / slave is ${delayinfo} seconds behind master | delay=${delayinfo}s"; exit ${STATE_OK};
+    fi
   fi
  else
  # Without delay thresholds
