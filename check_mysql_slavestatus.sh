@@ -86,7 +86,7 @@ fi
 
 # Important given variables for the DB-Connect
 #########################################################################
-while getopts "H:P:u:p:s:w:c:mh" Input;
+while getopts "H:P:u:p:s:w:c:m:h" Input;
 do
         case ${Input} in
         H)      host=${OPTARG};;
@@ -96,7 +96,7 @@ do
         s)      connection=\"${OPTARG}\";;
         w)      warn_delay=${OPTARG};;
         c)      crit_delay=${OPTARG};;
-        m)      moving=1;;
+        m)      moving=${OPTARG};;
         h)      echo -e "${help}"; exit 1;;
         \?)     echo "Wrong option given. Please use options -H for host, -P for port, -u for user and -p for password"
                 exit 1
@@ -160,7 +160,7 @@ if [ ${check} = ${ok} ] && [ ${checkio} = ${ok} ]; then
   then echo "WARNING: Slave is ${delayinfo} seconds behind Master | delay=${delayinfo}s"; exit ${STATE_WARNING}
   else 
     # Everything looks OK here but now let us check if the replication is moving
-    if [[ ${moving} -eq 1 ]] && [[ -n ${tmpfile} ]] && [[ $readpos -eq $execpos ]]
+    if [[ -n ${moving} ]] && [[ -n ${tmpfile} ]] && [[ $readpos -eq $execpos ]]
     then  
       #echo "Debug: Read pos is $readpos - Exec pos is $execpos" 
       # Check if tmp file exists
@@ -168,14 +168,14 @@ if [ ${check} = ${ok} ] && [ ${checkio} = ${ok} ]; then
       if [[ -w $tmpfile ]] 
       then 
         tmpfiletime=`date +%s -r $tmpfile`
-        if [[ `expr $curtime - $tmpfiletime` -gt ${warn_delay} ]]
+        if [[ `expr $curtime - $tmpfiletime` -gt ${moving} ]]
         then
           exectmp=`cat $tmpfile`
           #echo "Debug: Exec pos in tmpfile is $exectmp"
           if [[ $exectmp -eq $execpos ]]
           then 
             # The value read from the tmp file and from db are the same. Replication hasnt moved!
-            echo "WARNING: Slave replication has not moved in ${warn_delay} seconds. Manual check required."; exit ${STATE_WARNING}
+            echo "WARNING: Slave replication has not moved in ${moving} seconds. Manual check required."; exit ${STATE_WARNING}
           else 
             # Replication has moved since the tmp file was written. Delete tmp file and output OK.
             rm $tmpfile
