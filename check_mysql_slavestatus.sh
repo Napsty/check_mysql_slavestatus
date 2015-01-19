@@ -51,6 +51,7 @@
 # 2013101702 Exit CRITICAL when Slave IO in Connecting state            #
 # 2013123000 Slave_SQL_Running also matched Slave_SQL_Running_State     #
 # 2015011600 Added 'moving' check to catch possible connection issues   #
+# 2015011900 Use its own threshold for replication moving check         #
 #########################################################################
 # Usage: ./check_mysql_slavestatus.sh -H dbhost -P port -u dbuser -p dbpass [-s connection] [-w integer] [-c integer] [-m]
 #########################################################################
