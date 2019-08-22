@@ -73,7 +73,7 @@ STATE_UNKNOWN=3         # define the exit code if status is Unknown
 export PATH=$PATH:/usr/local/bin:/usr/bin:/bin # Set path
 crit="No"               # what is the answer of MySQL Slave_SQL_Running for a Critical status?
 ok="Yes"                # what is the answer of MySQL Slave_SQL_Running for an OK status?
-port=3306               # on which tcp port is the target MySQL slave listening?
+port="-P 3306"          # on which tcp port is the target MySQL slave listening?
 
 for cmd in mysql awk grep expr [
 do
@@ -123,7 +123,7 @@ test -w /tmp && tmpfile="/tmp/${host}pos.txt"
 # Check whether all required arguments were passed in (either option file or full connection settings)
 if [[ -z "${optfile}" && -z "${host}" && -z "${socket}" ]]; then
   echo -e "Missing required parameter(s)"; exit ${STATE_UNKNOWN}
-elif [[ -n "${host}" && (-z "${port}" || -z "${user}" || -z "${password}") ]]; then
+elif [[ -n "${host}" && (-z "${user}" || -z "${password}") ]]; then
   echo -e "Missing required parameter(s)"; exit ${STATE_UNKNOWN}
 elif [[ -n "${socket}" && (-z "${user}" || -z "${password}") ]]; then
   echo -e "Missing required parameter(s)"; exit ${STATE_UNKNOWN}
