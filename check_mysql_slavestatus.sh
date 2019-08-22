@@ -98,7 +98,7 @@ fi
 while getopts "H:P:u:p:S:s:w:c:o:m:h" Input;
 do
         case ${Input} in
-        H)      host="-h ${OPTARG}";slavetarget=${host};;
+        H)      host="-h ${OPTARG}";slavetarget=${OPTARG};;
         P)      port="-P ${OPTARG}";;
         u)      user="-u ${OPTARG}";;
         p)      password="${OPTARG}"; export MYSQL_PWD="${OPTARG}";;
