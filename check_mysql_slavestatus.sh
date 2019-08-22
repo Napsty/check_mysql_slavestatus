@@ -58,6 +58,7 @@
 # 2019082201 Improve password security (remove from mysql cli)          #
 # 2019082202 Added socket parameter (-S)                                #
 # 2019082203 Use default port 3306, makes -P optional                   #
+# 2019082204 Fix moving subcheck                                        #
 #########################################################################
 # Usage: ./check_mysql_slavestatus.sh (-o file|(-H dbhost [-P port]|-S socket) -u dbuser -p dbpass) [-s connection] [-w integer] [-c integer] [-m]
 #########################################################################
@@ -97,7 +98,7 @@ fi
 while getopts "H:P:u:p:S:s:w:c:o:m:h" Input;
 do
         case ${Input} in
-        H)      host="-h ${OPTARG}";;
+        H)      host="-h ${OPTARG}";slavetarget=${host};;
         P)      port="-P ${OPTARG}";;
         u)      user="-u ${OPTARG}";;
         p)      password="${OPTARG}"; export MYSQL_PWD="${OPTARG}";;
@@ -116,7 +117,7 @@ done
 
 # Check if we can write to tmp
 #########################################################################
-test -w /tmp && tmpfile="/tmp/${host}pos.txt"
+test -w /tmp && tmpfile="/tmp/${slavetarget}pos.txt"
 
 # Connect to the DB server and check for informations
 #########################################################################
