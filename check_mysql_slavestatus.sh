@@ -118,7 +118,7 @@ test -w /tmp && tmpfile="/tmp/${host}pos.txt"
 # Connect to the DB server and check for informations
 #########################################################################
 # Check whether all required arguments were passed in (either option file or full connection settings)
-if [[ -z "${optfile}" && -z "${host}" ]]; then
+if [[ -z "${optfile}" && -z "${host}" && -z "${socket}" ]]; then
   echo -e "Missing required parameter(s)"; exit ${STATE_UNKNOWN}
 elif [[ -n "${host}" && (-z "${port}" || -z "${user}" || -z "${password}") ]]; then
   echo -e "Missing required parameter(s)"; exit ${STATE_UNKNOWN}
