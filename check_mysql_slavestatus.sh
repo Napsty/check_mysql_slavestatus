@@ -54,6 +54,7 @@
 # 2015011600 Added 'moving' check to catch possible connection issues   #
 # 2015011900 Use its own threshold for replication moving check         #
 # 2019082200 Add support for mysql option file                          #
+# 2019082201 Improve password security (remove from mysql cli)          #
 #########################################################################
 # Usage: ./check_mysql_slavestatus.sh (-o file|-H dbhost -P port -u dbuser -p dbpass) [-s connection] [-w integer] [-c integer] [-m]
 #########################################################################
@@ -95,7 +96,7 @@ do
         H)      host="-h ${OPTARG}";;
         P)      port="-P ${OPTARG}";;
         u)      user="-u ${OPTARG}";;
-        p)      password="--password=${OPTARG}";;
+        p)      password="${OPTARG}"; export MYSQL_PWD="${OPTARG}";;
         s)      connection=\"${OPTARG}\";;
         w)      warn_delay=${OPTARG};;
         c)      crit_delay=${OPTARG};;
@@ -122,7 +123,7 @@ elif [[ -n "${host}" && (-z "${port}" || -z "${user}" || -z "${password}") ]]; t
 fi
 
 # Connect to the DB server and store output in vars
-ConnectionResult=`mysql ${optfile} ${host} ${port} ${user} ${password} -e "show slave ${connection} status\G" 2>&1`
+ConnectionResult=$(mysql ${optfile} ${host} ${port} ${user} -e "show slave ${connection} status\G" 2>&1)
 if [ -z "`echo "${ConnectionResult}" |grep Slave_IO_State`" ]; then
         echo -e "CRITICAL: Unable to connect to server"
         exit ${STATE_CRITICAL}
