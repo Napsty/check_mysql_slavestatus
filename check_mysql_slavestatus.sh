@@ -62,7 +62,7 @@
 # Usage: ./check_mysql_slavestatus.sh (-o file|(-H dbhost [-P port]|-S socket) -u dbuser -p dbpass) [-s connection] [-w integer] [-c integer] [-m]
 #########################################################################
 help="\ncheck_mysql_slavestatus.sh (c) 2008-2019 GNU GPLv2 licence
-Usage: check_mysql_slavestatus.sh (-o file|-H host [-P port] -u username -p password) [-S socket] [-s connection] [-w integer] [-c integer] [-m]\n
+Usage: $0 (-o file|(-H dbhost [-P port]|-S socket) -u username -p password) [-s connection] [-w integer] [-c integer] [-m]\n
 Options:\n-o Path to option file containing connection settings (e.g. /home/nagios/.my.cnf). Note: If this option is used, -H, -u, -p parameters will become optional\n-H Hostname or IP of slave server\n-P MySQL Port of slave server (optional, defaults to 3306)\n-u Username of DB-user\n-p Password of DB-user\n-S database socket\n-s Connection name (optional, with multi-source replication)\n-w Delay in seconds for Warning status (optional)\n-c Delay in seconds for Critical status (optional)\n
 Attention: The DB-user you type in must have CLIENT REPLICATION rights on the DB-server. Example:\n\tGRANT REPLICATION CLIENT on *.* TO 'nagios'@'%' IDENTIFIED BY 'secret';"
 
