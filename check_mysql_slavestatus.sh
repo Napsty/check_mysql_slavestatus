@@ -122,7 +122,7 @@ if [[ -z "${optfile}" && -z "${host}" && -z "${socket}" ]]; then
   echo -e "Missing required parameter(s)"; exit ${STATE_UNKNOWN}
 elif [[ -n "${host}" && (-z "${port}" || -z "${user}" || -z "${password}") ]]; then
   echo -e "Missing required parameter(s)"; exit ${STATE_UNKNOWN}
-elif [[ -n "${socket}" && (-z "${port}" || -z "${user}" || -z "${password}") ]]; then
+elif [[ -n "${socket}" && (-z "${user}" || -z "${password}") ]]; then
   echo -e "Missing required parameter(s)"; exit ${STATE_UNKNOWN}
 fi
 
