@@ -14,6 +14,7 @@
 #               Serge Victor for his mods added on 20131223             #
 #               Omri Bahumi for his fix added on 20131230               #
 #               Marc Falzon for his option mods added on 20190822       #
+#               Andreas Pfeiffer for adding socket option on 20190822   #
 # History:                                                              #
 # 2008041700 Original Script modified                                   #
 # 2008041701 Added additional info if status OK                         #
@@ -59,8 +60,8 @@
 # Usage: ./check_mysql_slavestatus.sh (-o file|-H dbhost -P port -u dbuser -p dbpass) [-s connection] [-w integer] [-c integer] [-m]
 #########################################################################
 help="\ncheck_mysql_slavestatus.sh (c) 2008-2019 GNU GPLv2 licence
-Usage: check_mysql_slavestatus.sh (-o file|-H host -P port -u username -p password) [-s connection] [-w integer] [-c integer] [-m]\n
-Options:\n-o Path to option file containing connection settings (e.g. /home/nagios/.my.cnf). Note: If this option is used, -H, -P, -u, -p parameters will become optional\n-H Hostname or IP of slave server\n-P MySQL Port of slave server\n-u Username of DB-user\n-p Password of DB-user\n-s Connection name (optional, with multi-source replication)\n-w Delay in seconds for Warning status (optional)\n-c Delay in seconds for Critical status (optional)\n
+Usage: check_mysql_slavestatus.sh (-o file|-H host -P port -u username -p password) [-S socket] [-s connection] [-w integer] [-c integer] [-m]\n
+Options:\n-o Path to option file containing connection settings (e.g. /home/nagios/.my.cnf). Note: If this option is used, -H, -P, -u, -p parameters will become optional\n-H Hostname or IP of slave server\n-P MySQL Port of slave server\n-u Username of DB-user\n-p Password of DB-user\n-S database socket\n-s Connection name (optional, with multi-source replication)\n-w Delay in seconds for Warning status (optional)\n-c Delay in seconds for Critical status (optional)\n
 Attention: The DB-user you type in must have CLIENT REPLICATION rights on the DB-server. Example:\n\tGRANT REPLICATION CLIENT on *.* TO 'nagios'@'%' IDENTIFIED BY 'secret';"
 
 STATE_OK=0              # define the exit code if status is OK
@@ -90,13 +91,14 @@ fi
 
 # Important given variables for the DB-Connect
 #########################################################################
-while getopts "H:P:u:p:s:w:c:o:m:h" Input;
+while getopts "H:P:u:p:S:s:w:c:o:m:h" Input;
 do
         case ${Input} in
         H)      host="-h ${OPTARG}";;
         P)      port="-P ${OPTARG}";;
         u)      user="-u ${OPTARG}";;
         p)      password="${OPTARG}"; export MYSQL_PWD="${OPTARG}";;
+        S)      socket="-S ${OPTARG}";;
         s)      connection=\"${OPTARG}\";;
         w)      warn_delay=${OPTARG};;
         c)      crit_delay=${OPTARG};;
@@ -116,14 +118,21 @@ test -w /tmp && tmpfile="/tmp/${host}pos.txt"
 # Connect to the DB server and check for informations
 #########################################################################
 # Check whether all required arguments were passed in (either option file or full connection settings)
-if [[ -z "${optfile}" && -z "${host}" ]]; then
+if [[ -z "${optfile}" && -z "${host}" && -z "${socket}" ]]; then
   echo -e "Missing required parameter(s)"; exit ${STATE_UNKNOWN}
 elif [[ -n "${host}" && (-z "${port}" || -z "${user}" || -z "${password}") ]]; then
+  echo -e "Missing required parameter(s)"; exit ${STATE_UNKNOWN}
+elif [[ -n "${socket}" && (-z "${user}" || -z "${password}") ]]; then
   echo -e "Missing required parameter(s)"; exit ${STATE_UNKNOWN}
 fi
 
 # Connect to the DB server and store output in vars
-ConnectionResult=$(mysql ${optfile} ${host} ${port} ${user} -e "show slave ${connection} status\G" 2>&1)
+if [[ -n $socket ]]; then 
+  ConnectionResult=$(mysql ${optfile} ${socket} ${user} -e "show slave ${connection} status\G" 2>&1)
+else
+  ConnectionResult=$(mysql ${optfile} ${host} ${port} ${user} -e "show slave ${connection} status\G" 2>&1)
+fi
+
 if [ -z "`echo "${ConnectionResult}" |grep Slave_IO_State`" ]; then
         echo -e "CRITICAL: Unable to connect to server"
         exit ${STATE_CRITICAL}
