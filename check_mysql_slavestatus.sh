@@ -57,12 +57,13 @@
 # 2019082200 Add support for mysql option file                          #
 # 2019082201 Improve password security (remove from mysql cli)          #
 # 2019082202 Added socket parameter (-S)                                #
+# 2019082203 Use default port 3306, makes -P optional                   #
 #########################################################################
-# Usage: ./check_mysql_slavestatus.sh (-o file|(-H dbhost -P port|-S socket) -u dbuser -p dbpass) [-s connection] [-w integer] [-c integer] [-m]
+# Usage: ./check_mysql_slavestatus.sh (-o file|(-H dbhost [-P port]|-S socket) -u dbuser -p dbpass) [-s connection] [-w integer] [-c integer] [-m]
 #########################################################################
 help="\ncheck_mysql_slavestatus.sh (c) 2008-2019 GNU GPLv2 licence
-Usage: check_mysql_slavestatus.sh (-o file|-H host -P port -u username -p password) [-S socket] [-s connection] [-w integer] [-c integer] [-m]\n
-Options:\n-o Path to option file containing connection settings (e.g. /home/nagios/.my.cnf). Note: If this option is used, -H, -P, -u, -p parameters will become optional\n-H Hostname or IP of slave server\n-P MySQL Port of slave server\n-u Username of DB-user\n-p Password of DB-user\n-S database socket\n-s Connection name (optional, with multi-source replication)\n-w Delay in seconds for Warning status (optional)\n-c Delay in seconds for Critical status (optional)\n
+Usage: check_mysql_slavestatus.sh (-o file|-H host [-P port] -u username -p password) [-S socket] [-s connection] [-w integer] [-c integer] [-m]\n
+Options:\n-o Path to option file containing connection settings (e.g. /home/nagios/.my.cnf). Note: If this option is used, -H, -u, -p parameters will become optional\n-H Hostname or IP of slave server\n-P MySQL Port of slave server (optional, defaults to 3306)\n-u Username of DB-user\n-p Password of DB-user\n-S database socket\n-s Connection name (optional, with multi-source replication)\n-w Delay in seconds for Warning status (optional)\n-c Delay in seconds for Critical status (optional)\n
 Attention: The DB-user you type in must have CLIENT REPLICATION rights on the DB-server. Example:\n\tGRANT REPLICATION CLIENT on *.* TO 'nagios'@'%' IDENTIFIED BY 'secret';"
 
 STATE_OK=0              # define the exit code if status is OK
@@ -72,6 +73,7 @@ STATE_UNKNOWN=3         # define the exit code if status is Unknown
 export PATH=$PATH:/usr/local/bin:/usr/bin:/bin # Set path
 crit="No"               # what is the answer of MySQL Slave_SQL_Running for a Critical status?
 ok="Yes"                # what is the answer of MySQL Slave_SQL_Running for an OK status?
+port=3306               # on which tcp port is the target MySQL slave listening?
 
 for cmd in mysql awk grep expr [
 do
