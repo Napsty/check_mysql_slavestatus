@@ -13,6 +13,7 @@
 #               Peter Lecki for his mods added on 20120803              #
 #               Serge Victor for his mods added on 20131223             #
 #               Omri Bahumi for his fix added on 20131230               #
+#               Marc Falzon for his option mods added on 20190822       #
 # History:                                                              #
 # 2008041700 Original Script modified                                   #
 # 2008041701 Added additional info if status OK                         #
@@ -52,12 +53,13 @@
 # 2013123000 Slave_SQL_Running also matched Slave_SQL_Running_State     #
 # 2015011600 Added 'moving' check to catch possible connection issues   #
 # 2015011900 Use its own threshold for replication moving check         #
+# 2019082200 Add support for mysql option file                          #
 #########################################################################
-# Usage: ./check_mysql_slavestatus.sh -H dbhost -P port -u dbuser -p dbpass [-s connection] [-w integer] [-c integer] [-m]
+# Usage: ./check_mysql_slavestatus.sh (-o file|-H dbhost -P port -u dbuser -p dbpass) [-s connection] [-w integer] [-c integer] [-m]
 #########################################################################
-help="\ncheck_mysql_slavestatus.sh (c) 2008-2015 GNU GPLv2 licence
-Usage: check_mysql_slavestatus.sh -H host -P port -u username -p password [-s connection] [-w integer] [-c integer] [-m]\n
-Options:\n-H Hostname or IP of slave server\n-P Port of slave server\n-u Username of DB-user\n-p Password of DB-user\n-s Connection name (optional, with multi-source replication)\n-w Delay in seconds for Warning status (optional)\n-c Delay in seconds for Critical status (optional)\n
+help="\ncheck_mysql_slavestatus.sh (c) 2008-2019 GNU GPLv2 licence
+Usage: check_mysql_slavestatus.sh (-o file|-H host -P port -u username -p password) [-s connection] [-w integer] [-c integer] [-m]\n
+Options:\n-o Path to option file containing connection settings (e.g. /home/nagios/.my.cnf). Note: If this option is used, -H, -P, -u, -p parameters will become optional\n-H Hostname or IP of slave server\n-P MySQL Port of slave server\n-u Username of DB-user\n-p Password of DB-user\n-s Connection name (optional, with multi-source replication)\n-w Delay in seconds for Warning status (optional)\n-c Delay in seconds for Critical status (optional)\n
 Attention: The DB-user you type in must have CLIENT REPLICATION rights on the DB-server. Example:\n\tGRANT REPLICATION CLIENT on *.* TO 'nagios'@'%' IDENTIFIED BY 'secret';"
 
 STATE_OK=0              # define the exit code if status is OK
@@ -77,7 +79,7 @@ do
  fi
 done
 
-# Check for people who need help - aren't we all nice ;-)
+# Check for people who need help
 #########################################################################
 if [ "${1}" = "--help" -o "${#}" = "0" ];
         then
@@ -87,19 +89,20 @@ fi
 
 # Important given variables for the DB-Connect
 #########################################################################
-while getopts "H:P:u:p:s:w:c:m:h" Input;
+while getopts "H:P:u:p:s:w:c:o:m:h" Input;
 do
         case ${Input} in
-        H)      host=${OPTARG};;
-        P)      port=${OPTARG};;
-        u)      user=${OPTARG};;
-        p)      password=${OPTARG};;
+        H)      host="-h ${OPTARG}";;
+        P)      port="-P ${OPTARG}";;
+        u)      user="-u ${OPTARG}";;
+        p)      password="--password=${OPTARG}";;
         s)      connection=\"${OPTARG}\";;
         w)      warn_delay=${OPTARG};;
         c)      crit_delay=${OPTARG};;
+        o)      optfile="--defaults-extra-file=${OPTARG}";;
         m)      moving=${OPTARG};;
         h)      echo -e "${help}"; exit 1;;
-        \?)     echo "Wrong option given. Please use options -H for host, -P for port, -u for user and -p for password"
+        \?)     echo "Wrong option given. Check help (-h, --help) for usage."
                 exit 1
                 ;;
         esac
@@ -111,15 +114,17 @@ test -w /tmp && tmpfile="/tmp/${host}pos.txt"
 
 # Connect to the DB server and check for informations
 #########################################################################
-# Check whether all required arguments were passed in
-if [ -z "${host}" -o -z "${port}" -o -z "${user}" -o -z "${password}" ];then
-        echo -e "${help}"
-        exit ${STATE_UNKNOWN}
+# Check whether all required arguments were passed in (either option file or full connection settings)
+if [[ -z "${optfile}" && -z "${host}" ]]; then
+  echo -e "Missing required parameter(s)"; exit ${STATE_UNKNOWN}
+elif [[ -n "${host}" && (-z "${port}" || -z "${user}" || -z "${password}") ]]; then
+  echo -e "Missing required parameter(s)"; exit ${STATE_UNKNOWN}
 fi
+
 # Connect to the DB server and store output in vars
-ConnectionResult=`mysql -h ${host} -P ${port} -u ${user} --password=${password} -e "show slave ${connection} status\G" 2>&1`
+ConnectionResult=`mysql ${optfile} ${host} ${port} ${user} ${password} -e "show slave ${connection} status\G" 2>&1`
 if [ -z "`echo "${ConnectionResult}" |grep Slave_IO_State`" ]; then
-        echo -e "CRITICAL: Unable to connect to server ${host}:${port} with username '${user}' and given password"
+        echo -e "CRITICAL: Unable to connect to server"
         exit ${STATE_CRITICAL}
 fi
 check=`echo "${ConnectionResult}" |grep Slave_SQL_Running: | awk '{print $2}'`
