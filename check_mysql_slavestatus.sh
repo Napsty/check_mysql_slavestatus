@@ -56,8 +56,9 @@
 # 2015011900 Use its own threshold for replication moving check         #
 # 2019082200 Add support for mysql option file                          #
 # 2019082201 Improve password security (remove from mysql cli)          #
+# 2019082202 Added socket parameter (-S)                                #
 #########################################################################
-# Usage: ./check_mysql_slavestatus.sh (-o file|-H dbhost -P port -u dbuser -p dbpass) [-s connection] [-w integer] [-c integer] [-m]
+# Usage: ./check_mysql_slavestatus.sh (-o file|(-H dbhost -P port|-S socket) -u dbuser -p dbpass) [-s connection] [-w integer] [-c integer] [-m]
 #########################################################################
 help="\ncheck_mysql_slavestatus.sh (c) 2008-2019 GNU GPLv2 licence
 Usage: check_mysql_slavestatus.sh (-o file|-H host -P port -u username -p password) [-S socket] [-s connection] [-w integer] [-c integer] [-m]\n
