@@ -63,8 +63,8 @@
 # Usage: ./check_mysql_slavestatus.sh (-o file|(-H dbhost [-P port]|-S socket) -u dbuser -p dbpass) [-s connection] [-w integer] [-c integer] [-m integer]
 #########################################################################
 help="\ncheck_mysql_slavestatus.sh (c) 2008-2019 GNU GPLv2 licence
-Usage: $0 (-o file|(-H dbhost [-P port]|-S socket) -u username -p password) [-s connection] [-w integer] [-c integer] [-m]\n
-Options:\n-o Path to option file containing connection settings (e.g. /home/nagios/.my.cnf). Note: If this option is used, -H, -u, -p parameters will become optional\n-H Hostname or IP of slave server\n-P MySQL Port of slave server (optional, defaults to 3306)\n-u Username of DB-user\n-p Password of DB-user\n-S database socket\n-s Connection name (optional, with multi-source replication)\n-w Replication delay in seconds for Warning status (optional)\n-c Replication delay in seconds for Critical status (optional)\n-m Threshold in seconds since when replication did not move (compares the slaves log position)\n
+Usage: $0 (-o file|(-H dbhost [-P port]|-S socket) -u username -p password) ([-s connection]|[-C channel] ) [-w integer] [-c integer] [-m]\n
+Options:\n-o Path to option file containing connection settings (e.g. /home/nagios/.my.cnf). Note: If this option is used, -H, -u, -p parameters will become optional\n-H Hostname or IP of slave server\n-P MySQL Port of slave server (optional, defaults to 3306)\n-u Username of DB-user\n-p Password of DB-user\n-S database socket\n-s Connection name (optional, with multi-source replication for mariadb)\n-C Channel (optional, with multi-source replication for mysql)\n-w Replication delay in seconds for Warning status (optional)\n-c Replication delay in seconds for Critical status (optional)\n-m Threshold in seconds since when replication did not move (compares the slaves log position)\n
 Attention: The DB-user you type in must have CLIENT REPLICATION rights on the DB-server. Example:\n\tGRANT REPLICATION CLIENT on *.* TO 'nagios'@'%' IDENTIFIED BY 'secret';"
 
 STATE_OK=0              # define the exit code if status is OK
@@ -95,7 +95,7 @@ fi
 
 # Important given variables for the DB-Connect
 #########################################################################
-while getopts "H:P:u:p:S:s:w:c:o:m:h" Input;
+while getopts "H:P:u:p:S:s:C:w:c:o:m:h" Input;
 do
         case ${Input} in
         H)      host="-h ${OPTARG}";slavetarget=${OPTARG};;
@@ -104,6 +104,7 @@ do
         p)      password="${OPTARG}"; export MYSQL_PWD="${OPTARG}";;
         S)      socket="-S ${OPTARG}";;
         s)      connection=\"${OPTARG}\";;
+        C)      channel=" FOR CHANNEL '${OPTARG}'";;
         w)      warn_delay=${OPTARG};;
         c)      crit_delay=${OPTARG};;
         o)      optfile="--defaults-extra-file=${OPTARG}";;
@@ -130,11 +131,27 @@ elif [[ -n "${socket}" && (-z "${user}" || -z "${password}") ]]; then
   echo -e "Missing required parameter(s)"; exit ${STATE_UNKNOWN}
 fi
 
+# Validate mutually exclusive parameters
+if [[ -n "${connection}" && -n "${channel}" ]]; then
+  echo -e "Connection and Channel parameters are mutually exclusive, please use only one of them."
+  exit ${STATE_UNKNOWN}
+fi
+
+# Create query
+QUERY="SHOW SLAVE "
+if [[ -n "${connection}" ]]; then
+  QUERY="${QUERY} ${connection} STATUS\G"
+elif [[ -n "${channel}" ]]; then
+  QUERY="${QUERY} STATUS ${channel}\G"
+else 
+  QUERY="${QUERY} STATUS\G"
+fi
+
 # Connect to the DB server and store output in vars
 if [[ -n $socket ]]; then 
-  ConnectionResult=$(mysql ${optfile} ${socket} ${user} -e "show slave ${connection} status\G" 2>&1)
+  ConnectionResult=$(mysql ${optfile} ${socket} ${user} -e "${QUERY}" 2>&1)
 else
-  ConnectionResult=$(mysql ${optfile} ${host} ${port} ${user} -e "show slave ${connection} status\G" 2>&1)
+  ConnectionResult=$(mysql ${optfile} ${host} ${port} ${user} -e "${QUERY}" 2>&1)
 fi
 
 if [ -z "`echo "${ConnectionResult}" |grep Slave_IO_State`" ]; then
