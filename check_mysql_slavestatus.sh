@@ -60,11 +60,11 @@
 # 2019082203 Use default port 3306, makes -P optional                   #
 # 2019082204 Fix moving subcheck, improve documentation                 #
 #########################################################################
-# Usage: ./check_mysql_slavestatus.sh (-o file|(-H dbhost [-P port]|-S socket) -u dbuser -p dbpass) [-s connection] [-w integer] [-c integer] [-m integer]
+# Usage: ./check_mysql_slavestatus.sh (-o file|(-H dbhost [-P port]|-S socket) -u dbuser -p dbpass) [-s connection] [-C channel] [-w integer] [-c integer] [-m integer]
 #########################################################################
 help="\ncheck_mysql_slavestatus.sh (c) 2008-2019 GNU GPLv2 licence
-Usage: $0 (-o file|(-H dbhost [-P port]|-S socket) -u username -p password) [-s connection] [-w integer] [-c integer] [-m]\n
-Options:\n-o Path to option file containing connection settings (e.g. /home/nagios/.my.cnf). Note: If this option is used, -H, -u, -p parameters will become optional\n-H Hostname or IP of slave server\n-P MySQL Port of slave server (optional, defaults to 3306)\n-u Username of DB-user\n-p Password of DB-user\n-S database socket\n-s Connection name (optional, with multi-source replication)\n-w Replication delay in seconds for Warning status (optional)\n-c Replication delay in seconds for Critical status (optional)\n-m Threshold in seconds since when replication did not move (compares the slaves log position)\n
+Usage: $0 (-o file|(-H dbhost [-P port]|-S socket) -u username -p password) ([-s connection]|[-C channel]) [-w integer] [-c integer] [-m]\n
+Options:\n-o Path to option file containing connection settings (e.g. /home/nagios/.my.cnf). Note: If this option is used, -H, -u, -p parameters will become optional\n-H Hostname or IP of slave server\n-P MySQL Port of slave server (optional, defaults to 3306)\n-u Username of DB-user\n-p Password of DB-user\n-S database socket\n-s Connection name (optional, with multi-source replication for mariadb)\n-C Channel (optional, with multi-source replication for mysql)\n-w Replication delay in seconds for Warning status (optional)\n-c Replication delay in seconds for Critical status (optional)\n-m Threshold in seconds since when replication did not move (compares the slaves log position)\n
 Attention: The DB-user you type in must have CLIENT REPLICATION rights on the DB-server. Example:\n\tGRANT REPLICATION CLIENT on *.* TO 'nagios'@'%' IDENTIFIED BY 'secret';"
 
 STATE_OK=0              # define the exit code if status is OK
@@ -95,7 +95,7 @@ fi
 
 # Important given variables for the DB-Connect
 #########################################################################
-while getopts "H:P:u:p:S:s:w:c:o:m:h" Input;
+while getopts "H:P:u:p:S:s:C:w:c:o:m:h" Input;
 do
         case ${Input} in
         H)      host="-h ${OPTARG}";slavetarget=${OPTARG};;
@@ -104,6 +104,7 @@ do
         p)      password="${OPTARG}"; export MYSQL_PWD="${OPTARG}";;
         S)      socket="-S ${OPTARG}";;
         s)      connection=\"${OPTARG}\";;
+        C)      channel="FOR CHANNEL '${OPTARG}'";;
         w)      warn_delay=${OPTARG};;
         c)      crit_delay=${OPTARG};;
         o)      optfile="--defaults-extra-file=${OPTARG}";;
@@ -130,11 +131,17 @@ elif [[ -n "${socket}" && (-z "${user}" || -z "${password}") ]]; then
   echo -e "Missing required parameter(s)"; exit ${STATE_UNKNOWN}
 fi
 
+# Validate mutually exclusive parameters
+if [[ -n "${connection}" && -n "${channel}" ]]; then
+  echo -e "Connection and Channel parameters are mutually exclusive, please use only one of them."
+  exit ${STATE_UNKNOWN}
+fi
+
 # Connect to the DB server and store output in vars
 if [[ -n $socket ]]; then 
-  ConnectionResult=$(mysql ${optfile} ${socket} ${user} -e "show slave ${connection} status\G" 2>&1)
+  ConnectionResult=$(mysql ${optfile} ${socket} ${user} -e "SHOW SLAVE ${connection} STATUS ${channel}\G" 2>&1)
 else
-  ConnectionResult=$(mysql ${optfile} ${host} ${port} ${user} -e "show slave ${connection} status\G" 2>&1)
+  ConnectionResult=$(mysql ${optfile} ${host} ${port} ${user} -e "SHOW SLAVE ${connection} STATUS ${channel}\G" 2>&1)
 fi
 
 if [ -z "`echo "${ConnectionResult}" |grep Slave_IO_State`" ]; then
@@ -148,8 +155,15 @@ delayinfo=`echo "${ConnectionResult}" |grep Seconds_Behind_Master: | awk '{print
 readpos=`echo "${ConnectionResult}" |grep Read_Master_Log_Pos: | awk '{print $2}'`
 execpos=`echo "${ConnectionResult}" |grep Exec_Master_Log_Pos: | awk '{print $2}'`
 
+multi=(${masterinfo})
+masternum="${#multi[@]}"
+
 # Output of different exit states
 #########################################################################
+if [ $masternum -gt 1 ]; then
+echo "CRITICAL:  Multiple master detected, please use the connection or channel parameter."; exit ${STATE_UNKNOWN};
+fi
+
 if [ ${check} = "NULL" ]; then
 echo "CRITICAL: Slave_SQL_Running is answering NULL"; exit ${STATE_CRITICAL};
 fi
@@ -170,7 +184,7 @@ if [ ${check} = ${ok} ] && [ ${checkio} = ${ok} ]; then
  # Delay thresholds are set
  if [[ -n ${warn_delay} ]] && [[ -n ${crit_delay} ]]; then
   if ! [[ ${warn_delay} -gt 0 ]]; then echo "Warning threshold must be a valid integer greater than 0"; exit $STATE_UNKNOWN; fi
-  if ! [[ ${crit_delay} -gt 0 ]]; then echo "Warning threshold must be a valid integer greater than 0"; exit $STATE_UNKNOWN; fi
+  if ! [[ ${crit_delay} -gt 0 ]]; then echo "Critical threshold must be a valid integer greater than 0"; exit $STATE_UNKNOWN; fi
   if [[ -z ${warn_delay} ]] || [[ -z ${crit_delay} ]]; then echo "Both warning and critical thresholds must be set"; exit $STATE_UNKNOWN; fi
   if [[ ${warn_delay} -gt ${crit_delay} ]]; then echo "Warning threshold cannot be greater than critical"; exit $STATE_UNKNOWN; fi
 
