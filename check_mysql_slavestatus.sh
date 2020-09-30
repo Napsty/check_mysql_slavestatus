@@ -15,6 +15,7 @@
 #               Omri Bahumi for his fix added on 20131230               #
 #               Marc Falzon for his option mods added on 20190822       #
 #               Andreas Pfeiffer for adding socket option on 20190822   #
+#               Alexis Reyes for adding multi-channels on 20200930      #
 # History:                                                              #
 # 2008041700 Original Script modified                                   #
 # 2008041701 Added additional info if status OK                         #
@@ -59,8 +60,9 @@
 # 2019082202 Added socket parameter (-S)                                #
 # 2019082203 Use default port 3306, makes -P optional                   #
 # 2019082204 Fix moving subcheck, improve documentation                 #
+# 2020093000 Added multi-channel replication (-C)                       #
 #########################################################################
-# Usage: ./check_mysql_slavestatus.sh (-o file|(-H dbhost [-P port]|-S socket) -u dbuser -p dbpass) [-s connection] [-C channel] [-w integer] [-c integer] [-m integer]
+# Usage: ./check_mysql_slavestatus.sh (-o file|(-H dbhost [-P port]|-S socket) -u dbuser -p dbpass) ([-s connection]|[-C channel]) [-w integer] [-c integer] [-m integer]
 #########################################################################
 help="\ncheck_mysql_slavestatus.sh (c) 2008-2019 GNU GPLv2 licence
 Usage: $0 (-o file|(-H dbhost [-P port]|-S socket) -u username -p password) ([-s connection]|[-C channel]) [-w integer] [-c integer] [-m]\n
