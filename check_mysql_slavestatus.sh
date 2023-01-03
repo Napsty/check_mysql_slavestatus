@@ -61,10 +61,11 @@
 # 2019082203 Use default port 3306, makes -P optional                   #
 # 2019082204 Fix moving subcheck, improve documentation                 #
 # 2020093000 Added multi-channel replication (-C)                       #
+# 2023010300 Detect either Host or Socket argument (issue #14)          #
 #########################################################################
 # Usage: ./check_mysql_slavestatus.sh (-o file|(-H dbhost [-P port]|-S socket) -u dbuser -p dbpass) ([-s connection]|[-C channel]) [-w integer] [-c integer] [-m integer]
 #########################################################################
-help="\ncheck_mysql_slavestatus.sh (c) 2008-2020 GNU GPLv2 licence
+help="\ncheck_mysql_slavestatus.sh (c) 2008-2023 GNU GPLv2 licence
 Usage: $0 (-o file|(-H dbhost [-P port]|-S socket) -u username -p password) ([-s connection]|[-C channel]) [-w integer] [-c integer] [-m]\n
 Options:\n-o Path to option file containing connection settings (e.g. /home/nagios/.my.cnf). Note: If this option is used, -H, -u, -p parameters will become optional\n-H Hostname or IP of slave server\n-P MySQL Port of slave server (optional, defaults to 3306)\n-u Username of DB-user\n-p Password of DB-user\n-S database socket\n-s Connection name (optional, with multi-source replication for mariadb)\n-C Channel (optional, with multi-source replication for mysql)\n-w Replication delay in seconds for Warning status (optional)\n-c Replication delay in seconds for Critical status (optional)\n-m Threshold in seconds since when replication did not move (compares the slaves log position)\n
 Attention: The DB-user you type in must have CLIENT REPLICATION rights on the DB-server. Example:\n\tGRANT REPLICATION CLIENT on *.* TO 'nagios'@'%' IDENTIFIED BY 'secret';"
@@ -131,6 +132,8 @@ elif [[ -n "${host}" && (-z "${user}" || -z "${password}") ]]; then
   echo -e "Missing required parameter(s)"; exit ${STATE_UNKNOWN}
 elif [[ -n "${socket}" && (-z "${user}" || -z "${password}") ]]; then
   echo -e "Missing required parameter(s)"; exit ${STATE_UNKNOWN}
+elif [[ -n "${socket}" && -n "${host}" ]]; then
+  echo -e "Either use -H Host or -S /path/to/mysql.sock but NOT both"; exit ${STATE_UNKNOWN}
 fi
 
 # Validate mutually exclusive parameters
