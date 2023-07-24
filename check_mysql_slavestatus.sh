@@ -63,6 +63,7 @@
 # 2020093000 Added multi-channel replication (-C)                       #
 # 2023010300 Detect either Host or Socket argument (issue #14)          #
 # 2023060200 Update documentation for privileges MariaDB 10.5+          #
+# 2023072400 Fix output in CRITICAL state                               #
 #########################################################################
 # Usage: ./check_mysql_slavestatus.sh (-o file|(-H dbhost [-P port]|-S socket) -u dbuser -p dbpass) ([-s connection]|[-C channel]) [-w integer] [-c integer] [-m integer]
 #########################################################################
@@ -176,15 +177,15 @@ echo "CRITICAL: Slave_SQL_Running is answering NULL"; exit ${STATE_CRITICAL};
 fi
 
 if [ ${check} = ${crit} ]; then
-echo "CRITICAL: ${host}:${port} Slave_SQL_Running: ${check}"; exit ${STATE_CRITICAL};
+echo "CRITICAL: Slave_SQL_Running: ${check}"; exit ${STATE_CRITICAL};
 fi
 
 if [ ${checkio} = ${crit} ]; then
-echo "CRITICAL: ${host} Slave_IO_Running: ${checkio}"; exit ${STATE_CRITICAL};
+echo "CRITICAL: Slave_IO_Running: ${checkio}"; exit ${STATE_CRITICAL};
 fi
 
 if [ ${checkio} = "Connecting" ]; then
-echo "CRITICAL: ${host} Slave_IO_Running: ${checkio}"; exit ${STATE_CRITICAL};
+echo "CRITICAL: Slave_IO_Running: ${checkio}"; exit ${STATE_CRITICAL};
 fi
 
 if [ ${check} = ${ok} ] && [ ${checkio} = ${ok} ]; then
