@@ -64,10 +64,11 @@
 # 2023010300 Detect either Host or Socket argument (issue #14)          #
 # 2023060200 Update documentation for privileges MariaDB 10.5+          #
 # 2023072400 Fix output in CRITICAL state                               #
+# 2026032000 Support REPLICA and SLAVE naming, depending on DB Version  #
 #########################################################################
 # Usage: ./check_mysql_slavestatus.sh (-o file|(-H dbhost [-P port]|-S socket) -u dbuser -p dbpass) ([-s connection]|[-C channel]) [-w integer] [-c integer] [-m integer]
 #########################################################################
-help="\ncheck_mysql_slavestatus.sh (c) 2008-2023 GNU GPLv2 licence
+help="\ncheck_mysql_slavestatus.sh (c) 2008-2026 GNU GPLv2 licence
 Usage: $0 (-o file|(-H dbhost [-P port]|-S socket) -u username -p password) ([-s connection]|[-C channel]) [-w integer] [-c integer] [-m]\n
 Options:\n-o Path to option file containing connection settings (e.g. /home/nagios/.my.cnf). Note: If this option is used, -H, -u, -p parameters will become optional\n-H Hostname or IP of slave server\n-P MySQL Port of slave server (optional, defaults to 3306)\n-u Username of DB-user\n-p Password of DB-user\n-S database socket\n-s Connection name (optional, with multi-source replication for mariadb)\n-C Channel (optional, with multi-source replication for mysql)\n-w Replication delay in seconds for Warning status (optional)\n-c Replication delay in seconds for Critical status (optional)\n-m Threshold in seconds since when replication did not move (compares the slaves log position)\n
 Attention: The DB-user you type in must have CLIENT REPLICATION rights on the DB-server. Example:\n\tGRANT REPLICATION CLIENT on *.* TO 'nagios'@'monitoringhost' IDENTIFIED BY 'secret';\n
@@ -145,23 +146,66 @@ if [[ -n "${connection}" && -n "${channel}" ]]; then
   exit ${STATE_UNKNOWN}
 fi
 
-# Connect to the DB server and store output in vars
-if [[ -n $socket ]]; then 
-  ConnectionResult=$(mysql ${optfile} ${socket} ${user} -e "SHOW SLAVE ${connection} STATUS ${channel}\G" 2>&1)
+# Connection and version check
+if [[ -n $socket ]]; then
+  dbversion=$(mysql ${optfile} ${socket} ${user} -Bse "SELECT VERSION();" 2>&1)
 else
-  ConnectionResult=$(mysql ${optfile} ${host} ${port} ${user} -e "SHOW SLAVE ${connection} STATUS ${channel}\G" 2>&1)
+  dbversion=$(mysql ${optfile} ${host} ${port} ${user} -Bse "SELECT VERSION();" 2>&1)
+fi
+if [[ $? -ne 0 ]]; then
+  echo -e "CRITICAL: Unable to connect to server. ${dbversion}"; exit ${STATE_CRITICAL}
+elif [[ -n $(echo "${dbversion}" | grep ERROR) ]]; then
+  echo -e "CRITICAL: Unable to connect to server. ${dbversion}"; exit ${STATE_CRITICAL}
+else
+  versionmajor=$(echo ${dbversion} | awk -F. '{print $1}')
+  versionminor=$(echo ${dbversion} | awk -F. '{print $2}')
+  if [[ -n $(echo "${dbversion}" | grep -i MariaDB) ]]; then dbtype="mariadb"; else dbtype="mysql"; fi
 fi
 
-if [ -z "`echo "${ConnectionResult}" |grep Slave_IO_State`" ]; then
-        echo -e "CRITICAL: Unable to connect to server"
-        exit ${STATE_CRITICAL}
+# Replica wording, depending on database version
+if [[ "$dbtype" == "mysql" ]]; then
+  versionpatch=$(echo ${dbversion} | awk -F. '{print $3}' | cut -c 1)
+  if [[ "$versionmajor" -gt 8 ]]; then replicaword="REPLICA"
+  elif [[ "$versionmajor" -lt 8 ]]; then replicaword="SLAVE"
+  elif [[ "$versionmajor" -ge 8 ]] && [[ "$versionminor" -gt 0 ]]; then replicaword="REPLICA"
+  elif [[ "$versionmajor" -ge 8 ]] && [[ "$versionminor" -eq 0 ]] && [[ "$versionpatch" -lt 22 ]]; then replicaword="SLAVE"
+  elif [[ "$versionmajor" -ge 8 ]] && [[ "$versionminor" -eq 0 ]] && [[ "$versionpatch" -ge 22 ]]; then replicaword="REPLICA"
+  fi
+else  # MariaDB
+  if [[ "$versionmajor" -ge 11 ]]; then replicaword="REPLICA"
+  elif [[ "$versionmajor" -eq 10 ]] && [[ "$versionminor" -lt 6 ]]; then replicaword="SLAVE"
+  elif [[ "$versionmajor" -eq 10 ]] && [[ "$versionminor" -ge 6 ]]; then replicaword="REPLICA"
+  else replicaword="REPLICA"
+  fi
 fi
-check=`echo "${ConnectionResult}" |grep Slave_SQL_Running: | awk '{print $2}'`
-checkio=`echo "${ConnectionResult}" |grep Slave_IO_Running: | awk '{print $2}'`
-masterinfo=`echo "${ConnectionResult}" |grep  Master_Host: | awk '{print $2}'`
-delayinfo=`echo "${ConnectionResult}" |grep Seconds_Behind_Master: | awk '{print $2}'`
-readpos=`echo "${ConnectionResult}" |grep Read_Master_Log_Pos: | awk '{print $2}'`
-execpos=`echo "${ConnectionResult}" |grep Exec_Master_Log_Pos: | awk '{print $2}'`
+
+# Replica information field names have changed in MySQL
+if [[ "$dbtype" == "mysql" ]]; then
+  if [[ "$replicaword" == "REPLICA" ]]; then fieldword="Replica"; masterword="Source"
+  elif [[ "$replicaword" == "SLAVE" ]]; then fieldword="Slave"; masterword="Master"
+  fi
+else
+  fieldword="Slave"; masterword="Master"
+fi
+
+# Retrieve replication status
+if [[ -n $socket ]]; then 
+  ConnectionResult=$(mysql ${optfile} ${socket} ${user} -e "SHOW ${replicaword} ${connection} STATUS ${channel}\G" 2>&1)
+else
+  ConnectionResult=$(mysql ${optfile} ${host} ${port} ${user} -e "SHOW ${replicaword} ${connection} STATUS ${channel}\G" 2>&1)
+fi
+
+if [ -z "$(echo "${ConnectionResult}" |grep ${fieldword}_IO_State)" ]; then
+  echo -e "CRITICAL: Unable to retrieve replication information"
+  exit ${STATE_CRITICAL}
+fi
+
+check=$(echo "${ConnectionResult}" |grep ${fieldword}_SQL_Running: | awk '{print $2}')
+checkio=$(echo "${ConnectionResult}" |grep ${fieldword}_IO_Running: | awk '{print $2}')
+masterinfo=$(echo "${ConnectionResult}" |grep  ${masterword}_Host: | awk '{print $2}')
+delayinfo=$(echo "${ConnectionResult}" |grep Seconds_Behind_${masterword}: | awk '{print $2}')
+readpos=$(echo "${ConnectionResult}" |grep Read_${masterword}_Log_Pos: | awk '{print $2}')
+execpos=$(echo "${ConnectionResult}" |grep Exec_${masterword}_Log_Pos: | awk '{print $2}')
 
 multi=(${masterinfo})
 masternum="${#multi[@]}"
@@ -169,23 +213,23 @@ masternum="${#multi[@]}"
 # Output of different exit states
 #########################################################################
 if [ $masternum -gt 1 ]; then
-echo "CRITICAL:  Multiple master detected, please use the connection or channel parameter."; exit ${STATE_UNKNOWN};
+echo "CRITICAL:  Multiple replications detected, please use the connection or channel parameter."; exit ${STATE_UNKNOWN};
 fi
 
 if [ ${check} = "NULL" ]; then
-echo "CRITICAL: Slave_SQL_Running is answering NULL"; exit ${STATE_CRITICAL};
+echo "CRITICAL: ${fieldword}_SQL_Running is answering NULL"; exit ${STATE_CRITICAL};
 fi
 
 if [ ${check} = ${crit} ]; then
-echo "CRITICAL: Slave_SQL_Running: ${check}"; exit ${STATE_CRITICAL};
+echo "CRITICAL: ${fieldword}_SQL_Running: ${check}"; exit ${STATE_CRITICAL};
 fi
 
 if [ ${checkio} = ${crit} ]; then
-echo "CRITICAL: Slave_IO_Running: ${checkio}"; exit ${STATE_CRITICAL};
+echo "CRITICAL: ${fieldword}_IO_Running: ${checkio}"; exit ${STATE_CRITICAL};
 fi
 
 if [ ${checkio} = "Connecting" ]; then
-echo "CRITICAL: Slave_IO_Running: ${checkio}"; exit ${STATE_CRITICAL};
+echo "CRITICAL: ${fieldword}_IO_Running: ${checkio}"; exit ${STATE_CRITICAL};
 fi
 
 if [ ${check} = ${ok} ] && [ ${checkio} = ${ok} ]; then
@@ -197,9 +241,9 @@ if [ ${check} = ${ok} ] && [ ${checkio} = ${ok} ]; then
   if [[ ${warn_delay} -gt ${crit_delay} ]]; then echo "Warning threshold cannot be greater than critical"; exit $STATE_UNKNOWN; fi
 
   if [[ ${delayinfo} -ge ${crit_delay} ]]
-  then echo "CRITICAL: Slave is ${delayinfo} seconds behind Master | delay=${delayinfo}s"; exit ${STATE_CRITICAL}
+  then echo "CRITICAL: ${fieldword} is ${delayinfo} seconds behind ${masterword} | delay=${delayinfo}s"; exit ${STATE_CRITICAL}
   elif [[ ${delayinfo} -ge ${warn_delay} ]]
-  then echo "WARNING: Slave is ${delayinfo} seconds behind Master | delay=${delayinfo}s"; exit ${STATE_WARNING}
+  then echo "WARNING: ${fieldword} is ${delayinfo} seconds behind ${masterword} | delay=${delayinfo}s"; exit ${STATE_WARNING}
   else 
     # Everything looks OK here but now let us check if the replication is moving
     if [[ -n ${moving} ]] && [[ -n ${tmpfile} ]] && [[ $readpos -eq $execpos ]]
@@ -217,29 +261,29 @@ if [ ${check} = ${ok} ] && [ ${checkio} = ${ok} ]; then
           if [[ $exectmp -eq $execpos ]]
           then 
             # The value read from the tmp file and from db are the same. Replication hasnt moved!
-            echo "WARNING: Slave replication has not moved in ${moving} seconds. Manual check required."; exit ${STATE_WARNING}
+            echo "WARNING: ${fieldword} replication has not moved in ${moving} seconds. Manual check required."; exit ${STATE_WARNING}
           else 
             # Replication has moved since the tmp file was written. Delete tmp file and output OK.
             rm $tmpfile
-            echo "OK: Slave SQL running: ${check} Slave IO running: ${checkio} / master: ${masterinfo} / slave is ${delayinfo} seconds behind master | delay=${delayinfo}s"; exit ${STATE_OK};
+            echo "OK: ${fieldword} SQL running: ${check} ${fieldword} IO running: ${checkio} / ${masterword}: ${masterinfo} / ${fieldword} is ${delayinfo} seconds behind ${masterword} | delay=${delayinfo}s"; exit ${STATE_OK};
           fi
         else 
-          echo "OK: Slave SQL running: ${check} Slave IO running: ${checkio} / master: ${masterinfo} / slave is ${delayinfo} seconds behind master | delay=${delayinfo}s"; exit ${STATE_OK};
+          echo "OK: ${fieldword} SQL running: ${check} ${fieldword} IO running: ${checkio} / ${masterword}: ${masterinfo} / ${fieldword} is ${delayinfo} seconds behind ${masterword} | delay=${delayinfo}s"; exit ${STATE_OK};
         fi
       else 
         echo "$execpos" > $tmpfile
-        echo "OK: Slave SQL running: ${check} Slave IO running: ${checkio} / master: ${masterinfo} / slave is ${delayinfo} seconds behind master | delay=${delayinfo}s"; exit ${STATE_OK};
+        echo "OK: ${fieldword} SQL running: ${check} ${fieldword} IO running: ${checkio} / ${masterword}: ${masterinfo} / ${fieldword} is ${delayinfo} seconds behind ${masterword} | delay=${delayinfo}s"; exit ${STATE_OK};
       fi
     else # Everything OK (no additional moving check)
-      echo "OK: Slave SQL running: ${check} Slave IO running: ${checkio} / master: ${masterinfo} / slave is ${delayinfo} seconds behind master | delay=${delayinfo}s"; exit ${STATE_OK};
+      echo "OK: ${fieldword} SQL running: ${check} ${fieldword} IO running: ${checkio} / ${masterword}: ${masterinfo} / ${fieldword} is ${delayinfo} seconds behind ${masterword} | delay=${delayinfo}s"; exit ${STATE_OK};
     fi
   fi
  else
  # Without delay thresholds
- echo "OK: Slave SQL running: ${check} Slave IO running: ${checkio} / master: ${masterinfo} / slave is ${delayinfo} seconds behind master | delay=${delayinfo}s"
+ echo "OK: ${fieldword} SQL running: ${check} ${fieldword} IO running: ${checkio} / ${masterword}: ${masterinfo} / ${fieldword} is ${delayinfo} seconds behind ${masterword} | delay=${delayinfo}s"
  exit ${STATE_OK};
  fi
 fi
 
-echo "UNKNOWN: should never reach this part (Slave_SQL_Running is ${check}, Slave_IO_Running is ${checkio})"
+echo "UNKNOWN: should never reach this part (${fieldword}_SQL_Running is ${check}, ${fieldword}_IO_Running is ${checkio})"
 exit ${STATE_UNKNOWN}
